@@ -5,12 +5,12 @@ export const SITE = {
   title: 'BSIT Student & Full‑Stack Developer',
   location: 'USTP Claveria',
   tagline: 'I build modern web systems, dashboards, and management platforms.',
-  email: 'emmanuel.danuco@example.com',
-  githubUsername: 'octocat',
+  email: 'danuco.emman@gmail.com',
+  githubUsername: 'w3weng',
   socials: {
-    facebook: 'https://facebook.com/',
-    github: 'https://github.com/',
-    instagram: 'https://instagram.com/',
+    facebook: 'https://www.facebook.com/daemmann',
+    github: 'https://github.com/w3weng',
+    instagram: 'https://www.instagram.com/w3weng/',
   },
 } as const
 
