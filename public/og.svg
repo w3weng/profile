@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#22d3ee" stop-opacity="0.35" />
+      <stop offset="0.5" stop-color="#a78bfa" stop-opacity="0.25" />
+      <stop offset="1" stop-color="#e879f9" stop-opacity="0.18" />
+    </linearGradient>
+    <radialGradient id="r" cx="50%" cy="40%" r="60%">
+      <stop offset="0" stop-color="#60a5fa" stop-opacity="0.22" />
+      <stop offset="0.55" stop-color="#a78bfa" stop-opacity="0.14" />
+      <stop offset="1" stop-color="#000" stop-opacity="0" />
+    </radialGradient>
+    <filter id="blur" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="22"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="630" fill="#0a0a0a" />
+  <rect width="1200" height="630" fill="url(#r)" />
+  <g filter="url(#blur)">
+    <circle cx="250" cy="180" r="180" fill="#60a5fa" fill-opacity="0.18"/>
+    <circle cx="980" cy="220" r="210" fill="#a78bfa" fill-opacity="0.16"/>
+    <circle cx="640" cy="520" r="240" fill="#22d3ee" fill-opacity="0.12"/>
+  </g>
+  <rect x="76" y="80" width="1048" height="470" rx="28" fill="url(#g)" fill-opacity="0.18" stroke="rgba(255,255,255,0.12)"/>
+
+  <text x="110" y="220" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="54" fill="#f4f4f5" font-weight="700">
+    Emmanuel A. Danuco II
+  </text>
+  <text x="110" y="285" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="30" fill="rgba(244,244,245,0.82)" font-weight="600">
+    BSIT Student &amp; FullStack Developer
+  </text>
+  <text x="110" y="350" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="22" fill="rgba(244,244,245,0.7)">
+    Modern web systems " dashboards " management platforms
+  </text>
+</svg>
+

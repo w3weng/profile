@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="750" viewBox="0 0 1200 750">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#60a5fa" stop-opacity="0.32" />
+      <stop offset="0.55" stop-color="#a78bfa" stop-opacity="0.24" />
+      <stop offset="1" stop-color="#e879f9" stop-opacity="0.18" />
+    </linearGradient>
+    <radialGradient id="r" cx="70%" cy="20%" r="60%">
+      <stop offset="0" stop-color="#60a5fa" stop-opacity="0.26" />
+      <stop offset="0.55" stop-color="#e879f9" stop-opacity="0.10" />
+      <stop offset="1" stop-color="#000" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="750" rx="56" fill="#0a0a0a"/>
+  <rect width="1200" height="750" fill="url(#r)"/>
+  <rect x="44" y="44" width="1112" height="662" rx="44" fill="url(#g)" fill-opacity="0.18" stroke="rgba(255,255,255,0.12)"/>
+  <g fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.12)">
+    <rect x="124" y="132" width="300" height="520" rx="26"/>
+    <rect x="452" y="132" width="624" height="250" rx="26" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.10)"/>
+    <rect x="452" y="414" width="624" height="238" rx="26" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.10)"/>
+  </g>
+  <g stroke="rgba(34,211,238,0.35)" stroke-width="6" stroke-linecap="round">
+    <path d="M506 330c80-90 160 60 250-20s170-30 280-120" />
+  </g>
+  <text x="124" y="95" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="28" fill="rgba(244,244,245,0.9)" font-weight="700">
+    City Hall Feedback  Analytics & Reports
+  </text>
+  <text x="124" y="640" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="18" fill="rgba(244,244,245,0.7)">
+    Replace this thumbnail with a real screenshot anytime.
+  </text>
+</svg>
+
