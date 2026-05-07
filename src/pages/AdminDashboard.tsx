@@ -6,6 +6,7 @@ import {
   FolderKanban,
   GraduationCap,
   Hammer,
+  Mail,
   MessageSquareQuote,
   Search,
   Sparkles,
@@ -30,6 +31,7 @@ import {
 import { requireSupabase } from '../lib/supabase'
 import type {
   CmsCertificate,
+  CmsContactMessage,
   CmsCurrentlyWorking,
   CmsExperience,
   CmsProject,
@@ -46,6 +48,7 @@ type TabId =
   | 'testimonials'
   | 'currently'
   | 'resume'
+  | 'messages'
 
 const TABS: { id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: 'projects', label: 'Projects', icon: FolderKanban },
@@ -55,6 +58,7 @@ const TABS: { id: TabId; label: string; icon: React.ComponentType<{ className?: 
   { id: 'testimonials', label: 'Testimonials', icon: MessageSquareQuote },
   { id: 'currently', label: 'Currently Working', icon: Hammer },
   { id: 'resume', label: 'Resume', icon: FileText },
+  { id: 'messages', label: 'Messages', icon: Mail },
 ]
 
 const toCsv = (arr: string[]) => arr.join(', ')
@@ -69,7 +73,6 @@ export default function AdminDashboard() {
   const { loading, authenticated, isAdmin } = useAdminSession()
   const [activeTab, setActiveTab] = useState<TabId>('projects')
   const [search, setSearch] = useState('')
-  const [refresh, setRefresh] = useState(0)
   const [deleting, setDeleting] = useState<{ table: string; id: string; label: string } | null>(null)
 
   const [projects, setProjects] = useState<CmsProject[]>([])
@@ -79,6 +82,7 @@ export default function AdminDashboard() {
   const [testimonials, setTestimonials] = useState<CmsTestimonial[]>([])
   const [currently, setCurrently] = useState<CmsCurrentlyWorking | null>(null)
   const [resume, setResume] = useState<CmsResume | null>(null)
+  const [messages, setMessages] = useState<CmsContactMessage[]>([])
   const [loadingData, setLoadingData] = useState(true)
 
   const [projectForm, setProjectForm] = useState({
@@ -106,6 +110,7 @@ export default function AdminDashboard() {
   const [projectScreenshotFiles, setProjectScreenshotFiles] = useState<File[]>([])
   const [projectPreview, setProjectPreview] = useState('')
   const [screenshotPreviews, setScreenshotPreviews] = useState<string[]>([])
+  const [projectModalOpen, setProjectModalOpen] = useState(false)
   const [resumeTitle, setResumeTitle] = useState('Resume')
   const [resumeFile, setResumeFile] = useState<File | null>(null)
   const [saving, setSaving] = useState(false)
@@ -113,7 +118,7 @@ export default function AdminDashboard() {
   const loadAll = async () => {
     try {
       setLoadingData(true)
-      const [p, s, e, c, t, cw, r] = await Promise.all([
+      const [p, s, e, c, t, cw, r, m] = await Promise.all([
         fetchTable<CmsProject>('projects'),
         fetchTable<CmsSkill>('skills'),
         fetchTable<CmsExperience>('experience'),
@@ -121,6 +126,7 @@ export default function AdminDashboard() {
         fetchTable<CmsTestimonial>('testimonials'),
         fetchTable<CmsCurrentlyWorking>('currently_working', 'updated_at'),
         fetchTable<CmsResume>('resume', 'uploaded_at'),
+        fetchTable<CmsContactMessage>('contact_messages', 'created_at'),
       ])
       setProjects(p)
       setSkills(s)
@@ -129,6 +135,7 @@ export default function AdminDashboard() {
       setTestimonials(t)
       setCurrently(cw[0] ?? null)
       setResume(r[0] ?? null)
+      setMessages(m)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to load admin data.')
     } finally {
@@ -139,7 +146,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     void loadAll()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refresh])
+  }, [])
 
   if (!loading && (!authenticated || !isAdmin)) return <Navigate to="/admin/login" replace />
 
@@ -160,12 +167,13 @@ export default function AdminDashboard() {
       }
 
       const existingScreenshots = fromCsv(projectForm.screenshots)
-      const uploadedScreenshots: string[] = []
-      for (const [idx, file] of projectScreenshotFiles.entries()) {
-        const ext = (file.name.split('.').pop() || 'png').toLowerCase()
-        const path = `projects/${slug}/screenshots/${idx + 1}-${Date.now()}.${ext}`
-        uploadedScreenshots.push(await uploadToPortfolio(path, file))
-      }
+      const uploadedScreenshots = await Promise.all(
+        projectScreenshotFiles.map(async (file, idx) => {
+          const ext = (file.name.split('.').pop() || 'png').toLowerCase()
+          const path = `projects/${slug}/screenshots/${idx + 1}-${Date.now()}.${ext}`
+          return uploadToPortfolio(path, file)
+        }),
+      )
       const screenshots = [...existingScreenshots, ...uploadedScreenshots]
 
       const payload = {
@@ -191,9 +199,16 @@ export default function AdminDashboard() {
         screenshots,
       }
 
-      if (projectForm.id) await updateRow<CmsProject>('projects', projectForm.id, payload)
-      else await insertRow<CmsProject>('projects', payload)
+      const saved = projectForm.id
+        ? ((await updateRow<CmsProject>('projects', projectForm.id, payload)) as CmsProject)
+        : ((await insertRow<CmsProject>('projects', payload)) as CmsProject)
       toast.success(projectForm.id ? 'Project updated.' : 'Project added.')
+      setProjects((prev) => {
+        if (projectForm.id) {
+          return prev.map((p) => (p.id === projectForm.id ? { ...p, ...saved } : p))
+        }
+        return [saved, ...prev]
+      })
       setProjectForm({
         id: '',
         slug: '',
@@ -219,7 +234,7 @@ export default function AdminDashboard() {
       setProjectScreenshotFiles([])
       setProjectPreview('')
       setScreenshotPreviews([])
-      setRefresh((v) => v + 1)
+      setProjectModalOpen(false)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to save project.')
     } finally {
@@ -232,7 +247,14 @@ export default function AdminDashboard() {
     try {
       await deleteRow(deleting.table as any, deleting.id)
       toast.success('Deleted successfully.')
-      setRefresh((v) => v + 1)
+      setProjects((prev) => prev.filter((v) => v.id !== deleting.id))
+      setSkills((prev) => prev.filter((v) => v.id !== deleting.id))
+      setExperience((prev) => prev.filter((v) => v.id !== deleting.id))
+      setCertificates((prev) => prev.filter((v) => v.id !== deleting.id))
+      setTestimonials((prev) => prev.filter((v) => v.id !== deleting.id))
+      setMessages((prev) => prev.filter((v) => v.id !== deleting.id))
+      setCurrently((prev) => (prev?.id === deleting.id ? null : prev))
+      setResume((prev) => (prev?.id === deleting.id ? null : prev))
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Delete failed.')
     } finally {
@@ -252,10 +274,13 @@ export default function AdminDashboard() {
         const path = `resume/${Date.now()}-${resumeFile.name}`
         fileUrl = await uploadToPortfolio(path, resumeFile)
       }
-      await insertRow<CmsResume>('resume', { title: resumeTitle || 'Resume', file_url: fileUrl })
+      const saved = (await insertRow<CmsResume>('resume', {
+        title: resumeTitle || 'Resume',
+        file_url: fileUrl,
+      })) as CmsResume
       toast.success('Resume updated.')
       setResumeFile(null)
-      setRefresh((v) => v + 1)
+      setResume(saved)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Resume upload failed.')
     } finally {
@@ -271,7 +296,7 @@ export default function AdminDashboard() {
       const storagePath = resume.file_url.split('/portfolio/')[1]
       if (storagePath) await deleteFromPortfolio(storagePath)
       toast.success('Resume removed.')
-      setRefresh((v) => v + 1)
+      setResume(null)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to delete resume.')
     } finally {
@@ -330,179 +355,116 @@ export default function AdminDashboard() {
             <div>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h2 className="text-xl font-semibold text-zinc-50">Projects Manager</h2>
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
-                  <input
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search projects"
-                    className="rounded-2xl border border-white/10 bg-white/[0.03] py-2 pl-9 pr-4 text-sm outline-none"
-                  />
+                <div className="flex items-center gap-2">
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+                    <input
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      placeholder="Search projects"
+                      className="rounded-2xl border border-white/10 bg-white/[0.03] py-2 pl-9 pr-4 text-sm outline-none"
+                    />
+                  </div>
+                  <Button
+                    onClick={() => {
+                      setProjectForm({
+                        id: '',
+                        slug: '',
+                        title: '',
+                        description: '',
+                        long_description: '',
+                        category: '',
+                        categories: '',
+                        tags: '',
+                        tech: '',
+                        features: '',
+                        status: 'Completed',
+                        year: '2026',
+                        github_url: '',
+                        demo: '',
+                        live_url: '',
+                        featured: false,
+                        sort_order: 0,
+                        cover_image: '',
+                        screenshots: '',
+                      })
+                      setProjectCoverFile(null)
+                      setProjectScreenshotFiles([])
+                      setProjectPreview('')
+                      setScreenshotPreviews([])
+                      setProjectModalOpen(true)
+                    }}
+                  >
+                    Add Project
+                  </Button>
                 </div>
               </div>
 
-              <div className="mt-5 grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-                <div className="overflow-hidden rounded-2xl border border-white/10">
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-white/[0.04] text-zinc-300">
-                      <tr>
-                        <th className="px-4 py-3">Title</th>
-                        <th className="px-4 py-3">Tags</th>
-                        <th className="px-4 py-3">Featured</th>
-                        <th className="px-4 py-3">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredProjects.map((p) => (
-                        <tr key={p.id} className="border-t border-white/10">
-                          <td className="px-4 py-3 text-zinc-100">{p.title}</td>
-                          <td className="px-4 py-3 text-zinc-300">{p.tags.slice(0, 2).join(', ')}</td>
-                          <td className="px-4 py-3">{p.featured ? 'Yes' : 'No'}</td>
-                          <td className="px-4 py-3">
-                            <div className="flex gap-2">
-                              <Button
-                                variant="ghost"
-                                className="px-3 py-1 text-xs"
-                                onClick={() =>
-                                  setProjectForm({
-                                    id: p.id,
-                                    slug: p.slug ?? '',
-                                    title: p.title,
-                                    description: p.description,
-                                    long_description: p.long_description,
-                                    category: p.category ?? '',
-                                    categories: toCsv(p.categories ?? []),
-                                    tags: toCsv(p.tags ?? []),
-                                    tech: toCsv(p.tech ?? []),
-                                    features: toCsv(p.features ?? []),
-                                    github_url: p.github_url ?? '',
-                                    demo: p.demo ?? '',
-                                    live_url: p.live_url ?? '',
-                                    status: p.status ?? 'Completed',
-                                    year: p.year ?? '2026',
-                                    featured: p.featured,
-                                    sort_order: p.sort_order,
-                                    cover_image: p.cover_image ?? p.thumbnail_url ?? '',
-                                    screenshots: toCsv(p.screenshots ?? []),
-                                  })
-                                }
-                              >
-                                Edit
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                className="px-2 py-1 text-xs text-rose-300"
-                                onClick={() => setDeleting({ table: 'projects', id: p.id, label: p.title })}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
-                  <p className="text-sm font-semibold text-zinc-50">
-                    {projectForm.id ? 'Edit project' : 'Add project'}
-                  </p>
-                  <div className="mt-3 space-y-3">
-                    {([
-                      'slug',
-                      'title',
-                      'description',
-                      'long_description',
-                      'category',
-                      'categories',
-                      'tags',
-                      'tech',
-                      'features',
-                      'status',
-                      'year',
-                      'github_url',
-                      'demo',
-                      'live_url',
-                      'screenshots',
-                    ] as const).map(
-                      (f) => (
-                        <input
-                          key={f}
-                          value={(projectForm as any)[f]}
-                          onChange={(e) => setProjectForm((v) => ({ ...v, [f]: e.target.value }))}
-                          placeholder={f.replaceAll('_', ' ')}
-                          className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm outline-none"
-                        />
-                      ),
-                    )}
-                    <label className="inline-flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={projectForm.featured}
-                        onChange={(e) => setProjectForm((v) => ({ ...v, featured: e.target.checked }))}
-                      />
-                      Featured project
-                    </label>
-
-                    <label className="block text-xs text-zinc-300">
-                      Upload cover image
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="mt-2 w-full rounded-xl border border-white/10 bg-white/[0.03] p-2"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0] ?? null
-                          setProjectCoverFile(file)
-                          setProjectPreview(file ? URL.createObjectURL(file) : '')
-                        }}
-                      />
-                    </label>
-                    {projectPreview || projectForm.cover_image ? (
-                      <img
-                        src={projectPreview || projectForm.cover_image}
-                        alt="preview"
-                        className="h-32 w-full rounded-xl object-cover"
-                      />
-                    ) : null}
-                    <label className="block text-xs text-zinc-300">
-                      Upload screenshots (multiple)
-                      <input
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        className="mt-2 w-full rounded-xl border border-white/10 bg-white/[0.03] p-2"
-                        onChange={(e) => {
-                          const files = Array.from(e.target.files ?? [])
-                          setProjectScreenshotFiles(files)
-                          setScreenshotPreviews(files.map((f) => URL.createObjectURL(f)))
-                        }}
-                      />
-                    </label>
-                    {screenshotPreviews.length ? (
-                      <div className="grid grid-cols-3 gap-2">
-                        {screenshotPreviews.map((url, idx) => (
-                          <div key={url} className="relative overflow-hidden rounded-lg border border-white/10">
-                            <img src={url} alt={`shot-${idx}`} className="h-16 w-full object-cover" />
-                            <button
-                              type="button"
+              <div className="mt-5 overflow-hidden rounded-2xl border border-white/10">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-white/[0.04] text-zinc-300">
+                    <tr>
+                      <th className="px-4 py-3">Title</th>
+                      <th className="px-4 py-3">Tags</th>
+                      <th className="px-4 py-3">Featured</th>
+                      <th className="px-4 py-3">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredProjects.map((p) => (
+                      <tr key={p.id} className="border-t border-white/10">
+                        <td className="px-4 py-3 text-zinc-100">{p.title}</td>
+                        <td className="px-4 py-3 text-zinc-300">{(p.tags ?? []).slice(0, 2).join(', ')}</td>
+                        <td className="px-4 py-3">{p.featured ? 'Yes' : 'No'}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex gap-2">
+                            <Button
+                              variant="ghost"
+                              className="px-3 py-1 text-xs"
                               onClick={() => {
-                                setProjectScreenshotFiles((arr) => arr.filter((_, i) => i !== idx))
-                                setScreenshotPreviews((arr) => arr.filter((_, i) => i !== idx))
+                                setProjectForm({
+                                  id: p.id,
+                                  slug: p.slug ?? '',
+                                  title: p.title,
+                                  description: p.description,
+                                  long_description: p.long_description,
+                                  category: p.category ?? '',
+                                  categories: toCsv(p.categories ?? []),
+                                  tags: toCsv(p.tags ?? []),
+                                  tech: toCsv(p.tech ?? []),
+                                  features: toCsv(p.features ?? []),
+                                  github_url: p.github_url ?? '',
+                                  demo: p.demo ?? '',
+                                  live_url: p.live_url ?? '',
+                                  status: p.status ?? 'Completed',
+                                  year: p.year ?? '2026',
+                                  featured: p.featured,
+                                  sort_order: p.sort_order,
+                                  cover_image: p.cover_image ?? p.thumbnail_url ?? '',
+                                  screenshots: toCsv(p.screenshots ?? []),
+                                })
+                                setProjectCoverFile(null)
+                                setProjectScreenshotFiles([])
+                                setScreenshotPreviews([])
+                                setProjectPreview('')
+                                setProjectModalOpen(true)
                               }}
-                              className="absolute right-1 top-1 rounded bg-black/60 px-1 text-[10px] text-white"
                             >
-                              x
-                            </button>
+                              Edit
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              className="px-2 py-1 text-xs text-rose-300"
+                              onClick={() => setDeleting({ table: 'projects', id: p.id, label: p.title })}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           </div>
-                        ))}
-                      </div>
-                    ) : null}
-                    <Button onClick={saveProject} disabled={saving} className="w-full">
-                      <Upload className="h-4 w-4" /> {saving ? 'Saving...' : 'Save project'}
-                    </Button>
-                  </div>
-                </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           ) : null}
@@ -516,9 +478,13 @@ export default function AdminDashboard() {
                 field === 'level' || field === 'sort_order' ? Number(value) || 0 : value
               }
               onSave={async (row) => {
-                if (row.id) await updateRow('skills', row.id, row)
-                else await insertRow('skills', row)
-                setRefresh((v) => v + 1)
+                if (row.id) {
+                  const saved = (await updateRow('skills', row.id, row)) as CmsSkill
+                  setSkills((prev) => prev.map((v) => (v.id === row.id ? { ...v, ...saved } : v)))
+                } else {
+                  const created = (await insertRow('skills', row)) as CmsSkill
+                  setSkills((prev) => [created, ...prev])
+                }
               }}
               onDelete={(id, label) => setDeleting({ table: 'skills', id, label })}
             />
@@ -538,9 +504,13 @@ export default function AdminDashboard() {
               }
               onInitial={(_field, value) => (Array.isArray(value) ? toCsv(value) : (value as any))}
               onSave={async (row) => {
-                if (row.id) await updateRow('experience', row.id, row)
-                else await insertRow('experience', row)
-                setRefresh((v) => v + 1)
+                if (row.id) {
+                  const saved = (await updateRow('experience', row.id, row)) as CmsExperience
+                  setExperience((prev) => prev.map((v) => (v.id === row.id ? { ...v, ...saved } : v)))
+                } else {
+                  const created = (await insertRow('experience', row)) as CmsExperience
+                  setExperience((prev) => [created, ...prev])
+                }
               }}
               onDelete={(id, label) => setDeleting({ table: 'experience', id, label })}
             />
@@ -555,9 +525,13 @@ export default function AdminDashboard() {
                 field === 'sort_order' ? Number(value) || 0 : value
               }
               onSave={async (row) => {
-                if (row.id) await updateRow('certificates', row.id, row)
-                else await insertRow('certificates', row)
-                setRefresh((v) => v + 1)
+                if (row.id) {
+                  const saved = (await updateRow('certificates', row.id, row)) as CmsCertificate
+                  setCertificates((prev) => prev.map((v) => (v.id === row.id ? { ...v, ...saved } : v)))
+                } else {
+                  const created = (await insertRow('certificates', row)) as CmsCertificate
+                  setCertificates((prev) => [created, ...prev])
+                }
               }}
               onDelete={(id, label) => setDeleting({ table: 'certificates', id, label })}
             />
@@ -572,9 +546,13 @@ export default function AdminDashboard() {
                 field === 'sort_order' ? Number(value) || 0 : value
               }
               onSave={async (row) => {
-                if (row.id) await updateRow('testimonials', row.id, row)
-                else await insertRow('testimonials', row)
-                setRefresh((v) => v + 1)
+                if (row.id) {
+                  const saved = (await updateRow('testimonials', row.id, row)) as CmsTestimonial
+                  setTestimonials((prev) => prev.map((v) => (v.id === row.id ? { ...v, ...saved } : v)))
+                } else {
+                  const created = (await insertRow('testimonials', row)) as CmsTestimonial
+                  setTestimonials((prev) => [created, ...prev])
+                }
               }}
               onDelete={(id, label) => setDeleting({ table: 'testimonials', id, label })}
             />
@@ -596,10 +574,11 @@ export default function AdminDashboard() {
                   const el = document.getElementById('currently-input') as HTMLTextAreaElement | null
                   const items = fromCsv(el?.value ?? '')
                   try {
-                    if (currently?.id) await updateRow('currently_working', currently.id, { items })
-                    else await insertRow('currently_working', { items })
+                    const saved = currently?.id
+                      ? ((await updateRow('currently_working', currently.id, { items })) as CmsCurrentlyWorking)
+                      : ((await insertRow('currently_working', { items })) as CmsCurrentlyWorking)
                     toast.success('Updated currently working section.')
-                    setRefresh((v) => v + 1)
+                    setCurrently(saved)
                   } catch (e) {
                     toast.error(e instanceof Error ? e.message : 'Save failed.')
                   }
@@ -607,6 +586,21 @@ export default function AdminDashboard() {
               >
                 Save
               </Button>
+              {currently?.id ? (
+                <Button
+                  variant="ghost"
+                  className="mt-2 text-rose-300"
+                  onClick={() =>
+                    setDeleting({
+                      table: 'currently_working',
+                      id: currently.id,
+                      label: 'Currently Working section',
+                    })
+                  }
+                >
+                  Delete currently working entry
+                </Button>
+              ) : null}
             </div>
           ) : null}
 
@@ -651,8 +645,156 @@ export default function AdminDashboard() {
               </div>
             </div>
           ) : null}
+
+          {!loadingData && activeTab === 'messages' ? (
+            <div>
+              <h2 className="text-xl font-semibold text-zinc-50">Contact Messages</h2>
+              <div className="mt-5 overflow-hidden rounded-2xl border border-white/10">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-white/[0.04] text-zinc-300">
+                    <tr>
+                      <th className="px-4 py-3">Name</th>
+                      <th className="px-4 py-3">Email</th>
+                      <th className="px-4 py-3">Message</th>
+                      <th className="px-4 py-3">Date</th>
+                      <th className="px-4 py-3">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {messages.map((m) => (
+                      <tr key={m.id} className="border-t border-white/10 align-top">
+                        <td className="px-4 py-3 text-zinc-100">{m.name}</td>
+                        <td className="px-4 py-3 text-zinc-300">{m.email}</td>
+                        <td className="max-w-[320px] whitespace-pre-wrap px-4 py-3 text-zinc-300">
+                          {m.message}
+                        </td>
+                        <td className="px-4 py-3 text-zinc-400">
+                          {new Date(m.created_at).toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3">
+                          <Button
+                            variant="ghost"
+                            className="px-2 py-1 text-xs text-rose-300"
+                            onClick={() =>
+                              setDeleting({
+                                table: 'contact_messages',
+                                id: m.id,
+                                label: `message from ${m.name}`,
+                              })
+                            }
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : null}
         </section>
       </div>
+
+      <Modal
+        open={projectModalOpen}
+        title={projectForm.id ? 'Edit project' : 'Add project'}
+        onClose={() => setProjectModalOpen(false)}
+        className="max-w-3xl"
+      >
+        <div className="space-y-3">
+          {([
+            'slug',
+            'title',
+            'description',
+            'long_description',
+            'category',
+            'categories',
+            'tags',
+            'tech',
+            'features',
+            'status',
+            'year',
+            'github_url',
+            'demo',
+            'live_url',
+            'screenshots',
+          ] as const).map((f) => (
+            <input
+              key={f}
+              value={(projectForm as any)[f]}
+              onChange={(e) => setProjectForm((v) => ({ ...v, [f]: e.target.value }))}
+              placeholder={f.replaceAll('_', ' ')}
+              className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm outline-none"
+            />
+          ))}
+          <label className="inline-flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={projectForm.featured}
+              onChange={(e) => setProjectForm((v) => ({ ...v, featured: e.target.checked }))}
+            />
+            Featured project
+          </label>
+
+          <label className="block text-xs text-zinc-300">
+            Upload cover image
+            <input
+              type="file"
+              accept="image/*"
+              className="mt-2 w-full rounded-xl border border-white/10 bg-white/[0.03] p-2"
+              onChange={(e) => {
+                const file = e.target.files?.[0] ?? null
+                setProjectCoverFile(file)
+                setProjectPreview(file ? URL.createObjectURL(file) : '')
+              }}
+            />
+          </label>
+          {projectPreview || projectForm.cover_image ? (
+            <img
+              src={projectPreview || projectForm.cover_image}
+              alt="preview"
+              className="h-32 w-full rounded-xl object-cover"
+            />
+          ) : null}
+          <label className="block text-xs text-zinc-300">
+            Upload screenshots (multiple)
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              className="mt-2 w-full rounded-xl border border-white/10 bg-white/[0.03] p-2"
+              onChange={(e) => {
+                const files = Array.from(e.target.files ?? [])
+                setProjectScreenshotFiles(files)
+                setScreenshotPreviews(files.map((f) => URL.createObjectURL(f)))
+              }}
+            />
+          </label>
+          {screenshotPreviews.length ? (
+            <div className="grid grid-cols-3 gap-2">
+              {screenshotPreviews.map((url, idx) => (
+                <div key={url} className="relative overflow-hidden rounded-lg border border-white/10">
+                  <img src={url} alt={`shot-${idx}`} className="h-16 w-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProjectScreenshotFiles((arr) => arr.filter((_, i) => i !== idx))
+                      setScreenshotPreviews((arr) => arr.filter((_, i) => i !== idx))
+                    }}
+                    className="absolute right-1 top-1 rounded bg-black/60 px-1 text-[10px] text-white"
+                  >
+                    x
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          <Button onClick={saveProject} disabled={saving} className="w-full">
+            <Upload className="h-4 w-4" /> {saving ? 'Saving...' : 'Save project'}
+          </Button>
+        </div>
+      </Modal>
 
       <Modal
         open={!!deleting}
@@ -696,55 +838,55 @@ function SimpleManager<T extends { id?: string }>({
   onInitial,
 }: SimpleManagerProps<T>) {
   const [draft, setDraft] = useState<Record<string, any>>({})
-  const [newDraft, setNewDraft] = useState<Record<string, any>>({})
   const [saving, setSaving] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [open, setOpen] = useState(false)
+
+  const openCreate = () => {
+    const next: Record<string, any> = {}
+    for (const f of fields) next[String(f)] = ''
+    setDraft(next)
+    setEditingId(null)
+    setOpen(true)
+  }
+
+  const openEdit = (row: T) => {
+    const next: Record<string, any> = {}
+    for (const f of fields) {
+      const raw = row[f]
+      next[String(f)] = onInitial ? onInitial(f, raw) : raw
+    }
+    setDraft(next)
+    setEditingId(String(row.id))
+    setOpen(true)
+  }
 
   return (
     <div>
-      <h2 className="text-xl font-semibold text-zinc-50">{title}</h2>
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-xl font-semibold text-zinc-50">{title}</h2>
+        <Button onClick={openCreate} className="px-3 py-2 text-xs">
+          Add new
+        </Button>
+      </div>
       <div className="mt-5 grid gap-4">
         {rows.map((row) => (
           <motion.div key={(row.id as string) ?? Math.random()} className="rounded-2xl border border-white/10 p-4">
-            <div className="grid gap-3 md:grid-cols-2">
-              {fields.map((field) => {
-                const v = draft[`${row.id}-${String(field)}`] ?? row[field]
-                const shown = onInitial ? onInitial(field, v) : (v as any)
-                return (
-                  <input
-                    key={String(field)}
-                    value={shown ?? ''}
-                    onChange={(e) =>
-                      setDraft((d) => ({ ...d, [`${row.id}-${String(field)}`]: e.target.value }))
-                    }
-                    placeholder={String(field)}
-                    className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm"
-                  />
-                )
-              })}
+            <div className="grid gap-2 md:grid-cols-2">
+              {fields.slice(0, 4).map((field) => (
+                <p key={String(field)} className="text-xs text-zinc-300">
+                  <span className="text-zinc-500">{String(field)}:</span>{' '}
+                  {Array.isArray(row[field]) ? toCsv((row[field] as string[]) ?? []) : String(row[field] ?? '')}
+                </p>
+              ))}
             </div>
             <div className="mt-3 flex gap-2">
               <Button
                 variant="secondary"
                 className="px-3 py-1 text-xs"
-                onClick={async () => {
-                  try {
-                    setSaving(true)
-                    const payload: Record<string, any> = { id: row.id }
-                    for (const f of fields) {
-                      const raw = draft[`${row.id}-${String(f)}`] ?? row[f]
-                      payload[String(f)] = onSerialize ? onSerialize(f, raw) : raw
-                    }
-                    await onSave(payload as Partial<T>)
-                    toast.success('Saved.')
-                  } catch (e) {
-                    toast.error(e instanceof Error ? e.message : 'Save failed.')
-                  } finally {
-                    setSaving(false)
-                  }
-                }}
-                disabled={saving}
+                onClick={() => openEdit(row)}
               >
-                Save
+                Edit
               </Button>
               {row.id ? (
                 <Button
@@ -760,43 +902,47 @@ function SimpleManager<T extends { id?: string }>({
         ))}
       </div>
 
-      <div className="mt-4 rounded-2xl border border-dashed border-white/20 p-4 text-sm text-zinc-300">
-        <p className="mb-3 text-zinc-200">Add new entry</p>
-        <div className="grid gap-3 md:grid-cols-2">
+      <Modal
+        open={open}
+        title={editingId ? 'Edit entry' : 'Add entry'}
+        onClose={() => setOpen(false)}
+        className="max-w-2xl"
+      >
+        <div className="space-y-3">
           {fields.map((field) => (
             <input
-              key={`new-${String(field)}`}
-              value={newDraft[String(field)] ?? ''}
-              onChange={(e) => setNewDraft((d) => ({ ...d, [String(field)]: e.target.value }))}
+              key={`form-${String(field)}`}
+              value={draft[String(field)] ?? ''}
+              onChange={(e) => setDraft((d) => ({ ...d, [String(field)]: e.target.value }))}
               placeholder={String(field)}
-              className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm"
+              className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm"
             />
           ))}
-        </div>
-        <Button
-          className="mt-3"
-          onClick={async () => {
-            try {
-              setSaving(true)
-              const payload: Record<string, any> = {}
-              for (const f of fields) {
-                const raw = newDraft[String(f)]
-                payload[String(f)] = onSerialize ? onSerialize(f, raw ?? '') : raw
+          <Button
+            className="w-full"
+            onClick={async () => {
+              try {
+                setSaving(true)
+                const payload: Record<string, any> = editingId ? { id: editingId } : {}
+                for (const f of fields) {
+                  const raw = draft[String(f)]
+                  payload[String(f)] = onSerialize ? onSerialize(f, raw ?? '') : raw
+                }
+                await onSave(payload as Partial<T>)
+                toast.success(editingId ? 'Saved.' : 'Added.')
+                setOpen(false)
+              } catch (e) {
+                toast.error(e instanceof Error ? e.message : 'Save failed.')
+              } finally {
+                setSaving(false)
               }
-              await onSave(payload as Partial<T>)
-              setNewDraft({})
-              toast.success('Added.')
-            } catch (e) {
-              toast.error(e instanceof Error ? e.message : 'Add failed.')
-            } finally {
-              setSaving(false)
-            }
-          }}
-          disabled={saving}
-        >
-          Add new
-        </Button>
-      </div>
+            }}
+            disabled={saving}
+          >
+            {saving ? 'Processing...' : editingId ? 'Save changes' : 'Create entry'}
+          </Button>
+        </div>
+      </Modal>
     </div>
   )
 }

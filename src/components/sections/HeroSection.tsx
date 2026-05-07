@@ -5,7 +5,6 @@ import { useTypewriter } from '../../hooks/useTypewriter'
 import { useCurrentlyWorking } from '../../hooks/cms/useCurrentlyWorking'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
-import { ResumeActions } from '../resume/ResumeActions'
 
 function scrollTo(id: string) {
   document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -79,7 +78,6 @@ export function HeroSection() {
               <Button variant="secondary" onClick={() => scrollTo('contact')}>
                 <Mail className="h-4 w-4" /> Contact Me
               </Button>
-              <ResumeActions />
             </motion.div>
 
             <motion.div

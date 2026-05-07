@@ -17,14 +17,23 @@ type TableName =
   | 'testimonials'
   | 'currently_working'
   | 'resume'
+  | 'contact_messages'
 
 export async function fetchTable<T>(table: TableName, orderBy = 'sort_order') {
   const client = requireSupabase()
   const q = client.from(table).select('*')
+  let query
+  if (table === 'currently_working') {
+    query = q.order('updated_at', { ascending: false }).limit(1)
+  } else if (table === 'resume') {
+    query = q.order('uploaded_at', { ascending: false }).limit(1)
+  } else if (table === 'contact_messages') {
+    query = q.order('created_at', { ascending: false })
+  } else {
+    query = q.order(orderBy, { ascending: true }).order('created_at', { ascending: false })
+  }
   const { data, error } = await withTimeout<any>(
-    table === 'currently_working' || table === 'resume'
-      ? q.order('updated_at', { ascending: false }).limit(1)
-      : q.order(orderBy, { ascending: true }).order('created_at', { ascending: false }),
+    query,
     `Loading ${table} timed out.`,
   )
   if (error) throw error

@@ -83,3 +83,11 @@ export type CmsResume = {
   uploaded_at: string
 }
 
+export type CmsContactMessage = {
+  id: string
+  name: string
+  email: string
+  message: string
+  created_at: string
+}
+

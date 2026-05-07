@@ -5,7 +5,6 @@ import { SITE } from '../../constants/site'
 import { submitContactMessage } from '../../lib/cms'
 import { Button } from '../ui/Button'
 import { SectionHeading } from '../ui/SectionHeading'
-import { ResumeActions } from '../resume/ResumeActions'
 import { toast } from '../ui/Toaster'
 
 type FormState = { name: string; email: string; message: string }
@@ -108,7 +107,6 @@ export function ContactSection() {
                 </>
               )}
             </Button>
-            <ResumeActions compact />
           </div>
         </motion.form>
 

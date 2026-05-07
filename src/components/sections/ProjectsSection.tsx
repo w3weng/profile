@@ -152,17 +152,19 @@ export function ProjectsSection() {
                   <div className="glass glass-hover h-full rounded-2xl overflow-hidden">
                     {/* premium thumbnail */}
                     <div className="relative aspect-[16/10] overflow-hidden">
-                      <img
-                        src={cover}
-                        alt={`${proj.title} thumbnail`}
-                        loading="lazy"
-                        onLoad={() => setLoaded((v) => ({ ...v, [proj.id]: true }))}
-                        className={cn(
-                          'absolute inset-0 h-full w-full object-cover',
-                          'transition duration-700',
-                          loaded[proj.id] ? 'opacity-100 scale-100' : 'opacity-0 scale-[1.02]',
-                        )}
-                      />
+                      {cover ? (
+                        <img
+                          src={cover}
+                          alt={`${proj.title} thumbnail`}
+                          loading="lazy"
+                          onLoad={() => setLoaded((v) => ({ ...v, [proj.id]: true }))}
+                          className={cn(
+                            'absolute inset-0 h-full w-full object-cover',
+                            'transition duration-700',
+                            loaded[proj.id] ? 'opacity-100 scale-100' : 'opacity-0 scale-[1.02]',
+                          )}
+                        />
+                      ) : null}
                       <div className="absolute inset-0 bg-gradient-to-br from-glow-cyan/15 via-glow-purple/10 to-transparent" />
                       <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(34,211,238,0.22),transparent_55%),radial-gradient(circle_at_70%_40%,rgba(167,139,250,0.18),transparent_50%),radial-gradient(circle_at_50%_90%,rgba(232,121,249,0.12),transparent_45%)]" />
                       <div className="absolute inset-0 opacity-70 bg-grid-fade [background-size:44px_44px]" />
@@ -223,27 +225,33 @@ export function ProjectsSection() {
         {selected ? (
           <div className="space-y-5">
             <div className="relative overflow-hidden rounded-2xl border border-white/10">
-              <motion.img
-                key={`${selected.id}-${activeImage}`}
-                src={selectedScreenshots[activeImage] ?? selected.cover_image ?? selected.thumbnail_url ?? ''}
-                alt={`${selected.title} screenshot ${activeImage + 1}`}
-                loading="lazy"
-                initial={{ opacity: 0.3, scale: 1.01 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.24 }}
-                className="h-auto min-h-[280px] w-full object-cover"
-                onTouchStart={(e) => setTouchStartX(e.changedTouches[0]?.clientX ?? null)}
-                onTouchEnd={(e) => {
-                  const endX = e.changedTouches[0]?.clientX ?? null
-                  if (touchStartX === null || endX === null) return
-                  const delta = endX - touchStartX
-                  if (Math.abs(delta) > 40) {
-                    if (delta > 0) showPrev()
-                    else showNext()
-                  }
-                  setTouchStartX(null)
-                }}
-              />
+              {selectedScreenshots[activeImage] ? (
+                <motion.img
+                  key={`${selected.id}-${activeImage}`}
+                  src={selectedScreenshots[activeImage]}
+                  alt={`${selected.title} screenshot ${activeImage + 1}`}
+                  loading="lazy"
+                  initial={{ opacity: 0.3, scale: 1.01 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.24 }}
+                  className="h-auto min-h-[280px] w-full object-cover"
+                  onTouchStart={(e) => setTouchStartX(e.changedTouches[0]?.clientX ?? null)}
+                  onTouchEnd={(e) => {
+                    const endX = e.changedTouches[0]?.clientX ?? null
+                    if (touchStartX === null || endX === null) return
+                    const delta = endX - touchStartX
+                    if (Math.abs(delta) > 40) {
+                      if (delta > 0) showPrev()
+                      else showNext()
+                    }
+                    setTouchStartX(null)
+                  }}
+                />
+              ) : (
+                <div className="grid min-h-[280px] place-items-center bg-white/[0.03]">
+                  <p className="text-xs text-zinc-300">No screenshot available</p>
+                </div>
+              )}
               <div className="absolute inset-0 bg-gradient-to-t from-base-900/70 via-transparent to-transparent" />
               {selectedScreenshots.length > 1 ? (
                 <>
