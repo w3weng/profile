@@ -38,9 +38,13 @@ end $$;
 -- CMS Tables
 create table if not exists public.projects (
   id uuid primary key default gen_random_uuid(),
+  slug text unique,
   title text not null,
   description text not null,
   long_description text not null,
+  category text,
+  cover_image text,
+  screenshots text[] not null default '{}',
   thumbnail_url text,
   featured boolean not null default false,
   categories text[] not null default '{}',
@@ -48,7 +52,11 @@ create table if not exists public.projects (
   tech text[] not null default '{}',
   features text[] not null default '{}',
   github_url text,
+  github text,
+  demo text,
   live_url text,
+  status text,
+  year text,
   sort_order int not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -139,6 +147,19 @@ create table if not exists public.contact_messages (
   message text not null,
   created_at timestamptz not null default now()
 );
+```
+
+If your `projects` table already exists, run:
+
+```sql
+alter table public.projects add column if not exists slug text unique;
+alter table public.projects add column if not exists category text;
+alter table public.projects add column if not exists cover_image text;
+alter table public.projects add column if not exists screenshots text[] not null default '{}';
+alter table public.projects add column if not exists github text;
+alter table public.projects add column if not exists demo text;
+alter table public.projects add column if not exists status text;
+alter table public.projects add column if not exists year text;
 ```
 
 ## 3) Storage buckets

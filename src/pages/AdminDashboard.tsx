@@ -83,21 +83,29 @@ export default function AdminDashboard() {
 
   const [projectForm, setProjectForm] = useState({
     id: '',
+    slug: '',
     title: '',
     description: '',
     long_description: '',
+    category: '',
     categories: '',
     tags: '',
     tech: '',
     features: '',
+    status: 'Completed',
+    year: '2026',
     github_url: '',
+    demo: '',
     live_url: '',
     featured: false,
     sort_order: 0,
-    thumbnail_url: '',
+    cover_image: '',
+    screenshots: '',
   })
-  const [projectFile, setProjectFile] = useState<File | null>(null)
+  const [projectCoverFile, setProjectCoverFile] = useState<File | null>(null)
+  const [projectScreenshotFiles, setProjectScreenshotFiles] = useState<File[]>([])
   const [projectPreview, setProjectPreview] = useState('')
+  const [screenshotPreviews, setScreenshotPreviews] = useState<string[]>([])
   const [resumeTitle, setResumeTitle] = useState('Resume')
   const [resumeFile, setResumeFile] = useState<File | null>(null)
   const [saving, setSaving] = useState(false)
@@ -136,31 +144,51 @@ export default function AdminDashboard() {
   if (!loading && (!authenticated || !isAdmin)) return <Navigate to="/admin/login" replace />
 
   const filteredProjects = projects.filter((p) =>
-    `${p.title} ${p.description} ${p.tags.join(' ')}`.toLowerCase().includes(search.toLowerCase()),
+    `${p.title} ${p.description} ${(p.tags ?? []).join(' ')}`.toLowerCase().includes(search.toLowerCase()),
   )
 
   const saveProject = async () => {
     try {
       setSaving(true)
-      let thumbnail = projectForm.thumbnail_url
-      if (projectFile) {
-        const path = `projects/${Date.now()}-${projectFile.name}`
-        thumbnail = await uploadToPortfolio(path, projectFile)
+      const slug = projectForm.slug.trim() || projectForm.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+
+      let coverImage = projectForm.cover_image
+      if (projectCoverFile) {
+        const ext = (projectCoverFile.name.split('.').pop() || 'png').toLowerCase()
+        const path = `projects/${slug}/cover.${ext}`
+        coverImage = await uploadToPortfolio(path, projectCoverFile)
       }
 
+      const existingScreenshots = fromCsv(projectForm.screenshots)
+      const uploadedScreenshots: string[] = []
+      for (const [idx, file] of projectScreenshotFiles.entries()) {
+        const ext = (file.name.split('.').pop() || 'png').toLowerCase()
+        const path = `projects/${slug}/screenshots/${idx + 1}-${Date.now()}.${ext}`
+        uploadedScreenshots.push(await uploadToPortfolio(path, file))
+      }
+      const screenshots = [...existingScreenshots, ...uploadedScreenshots]
+
       const payload = {
+        slug,
         title: projectForm.title,
         description: projectForm.description,
         long_description: projectForm.long_description,
+        category: projectForm.category || null,
         categories: fromCsv(projectForm.categories),
         tags: fromCsv(projectForm.tags),
         tech: fromCsv(projectForm.tech),
         features: fromCsv(projectForm.features),
+        status: projectForm.status || 'Completed',
+        year: projectForm.year || null,
         github_url: projectForm.github_url || null,
+        github: projectForm.github_url || null,
+        demo: projectForm.demo || null,
         live_url: projectForm.live_url || null,
         featured: projectForm.featured,
         sort_order: Number(projectForm.sort_order) || 0,
-        thumbnail_url: thumbnail || null,
+        cover_image: coverImage || null,
+        thumbnail_url: coverImage || null,
+        screenshots,
       }
 
       if (projectForm.id) await updateRow<CmsProject>('projects', projectForm.id, payload)
@@ -168,21 +196,29 @@ export default function AdminDashboard() {
       toast.success(projectForm.id ? 'Project updated.' : 'Project added.')
       setProjectForm({
         id: '',
+        slug: '',
         title: '',
         description: '',
         long_description: '',
+        category: '',
         categories: '',
         tags: '',
         tech: '',
         features: '',
+        status: 'Completed',
+        year: '2026',
         github_url: '',
+        demo: '',
         live_url: '',
         featured: false,
         sort_order: 0,
-        thumbnail_url: '',
+        cover_image: '',
+        screenshots: '',
       })
-      setProjectFile(null)
+      setProjectCoverFile(null)
+      setProjectScreenshotFiles([])
       setProjectPreview('')
+      setScreenshotPreviews([])
       setRefresh((v) => v + 1)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to save project.')
@@ -330,18 +366,24 @@ export default function AdminDashboard() {
                                 onClick={() =>
                                   setProjectForm({
                                     id: p.id,
+                                    slug: p.slug ?? '',
                                     title: p.title,
                                     description: p.description,
                                     long_description: p.long_description,
-                                    categories: toCsv(p.categories),
-                                    tags: toCsv(p.tags),
-                                    tech: toCsv(p.tech),
-                                    features: toCsv(p.features),
+                                    category: p.category ?? '',
+                                    categories: toCsv(p.categories ?? []),
+                                    tags: toCsv(p.tags ?? []),
+                                    tech: toCsv(p.tech ?? []),
+                                    features: toCsv(p.features ?? []),
                                     github_url: p.github_url ?? '',
+                                    demo: p.demo ?? '',
                                     live_url: p.live_url ?? '',
+                                    status: p.status ?? 'Completed',
+                                    year: p.year ?? '2026',
                                     featured: p.featured,
                                     sort_order: p.sort_order,
-                                    thumbnail_url: p.thumbnail_url ?? '',
+                                    cover_image: p.cover_image ?? p.thumbnail_url ?? '',
+                                    screenshots: toCsv(p.screenshots ?? []),
                                   })
                                 }
                               >
@@ -367,7 +409,23 @@ export default function AdminDashboard() {
                     {projectForm.id ? 'Edit project' : 'Add project'}
                   </p>
                   <div className="mt-3 space-y-3">
-                    {(['title', 'description', 'long_description', 'categories', 'tags', 'tech', 'features', 'github_url', 'live_url'] as const).map(
+                    {([
+                      'slug',
+                      'title',
+                      'description',
+                      'long_description',
+                      'category',
+                      'categories',
+                      'tags',
+                      'tech',
+                      'features',
+                      'status',
+                      'year',
+                      'github_url',
+                      'demo',
+                      'live_url',
+                      'screenshots',
+                    ] as const).map(
                       (f) => (
                         <input
                           key={f}
@@ -388,24 +446,57 @@ export default function AdminDashboard() {
                     </label>
 
                     <label className="block text-xs text-zinc-300">
-                      Upload thumbnail
+                      Upload cover image
                       <input
                         type="file"
                         accept="image/*"
                         className="mt-2 w-full rounded-xl border border-white/10 bg-white/[0.03] p-2"
                         onChange={(e) => {
                           const file = e.target.files?.[0] ?? null
-                          setProjectFile(file)
+                          setProjectCoverFile(file)
                           setProjectPreview(file ? URL.createObjectURL(file) : '')
                         }}
                       />
                     </label>
-                    {projectPreview || projectForm.thumbnail_url ? (
+                    {projectPreview || projectForm.cover_image ? (
                       <img
-                        src={projectPreview || projectForm.thumbnail_url}
+                        src={projectPreview || projectForm.cover_image}
                         alt="preview"
                         className="h-32 w-full rounded-xl object-cover"
                       />
+                    ) : null}
+                    <label className="block text-xs text-zinc-300">
+                      Upload screenshots (multiple)
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        className="mt-2 w-full rounded-xl border border-white/10 bg-white/[0.03] p-2"
+                        onChange={(e) => {
+                          const files = Array.from(e.target.files ?? [])
+                          setProjectScreenshotFiles(files)
+                          setScreenshotPreviews(files.map((f) => URL.createObjectURL(f)))
+                        }}
+                      />
+                    </label>
+                    {screenshotPreviews.length ? (
+                      <div className="grid grid-cols-3 gap-2">
+                        {screenshotPreviews.map((url, idx) => (
+                          <div key={url} className="relative overflow-hidden rounded-lg border border-white/10">
+                            <img src={url} alt={`shot-${idx}`} className="h-16 w-full object-cover" />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setProjectScreenshotFiles((arr) => arr.filter((_, i) => i !== idx))
+                                setScreenshotPreviews((arr) => arr.filter((_, i) => i !== idx))
+                              }}
+                              className="absolute right-1 top-1 rounded bg-black/60 px-1 text-[10px] text-white"
+                            >
+                              x
+                            </button>
+                          </div>
+                        ))}
+                      </div>
                     ) : null}
                     <Button onClick={saveProject} disabled={saving} className="w-full">
                       <Upload className="h-4 w-4" /> {saving ? 'Saving...' : 'Save project'}

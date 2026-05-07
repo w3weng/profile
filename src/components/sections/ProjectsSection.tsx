@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { ExternalLink, GitBranch, Layers3 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { ChevronLeft, ChevronRight, ExternalLink, GitBranch, Layers3 } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
@@ -29,6 +29,8 @@ export function ProjectsSection() {
   const [filter, setFilter] = useState<Filter>('All')
   const [selected, setSelected] = useState<CmsProject | null>(null)
   const [loaded, setLoaded] = useState<Record<string, boolean>>({})
+  const [activeImage, setActiveImage] = useState(0)
+  const [touchStartX, setTouchStartX] = useState<number | null>(null)
 
   const projects = data ?? []
   const tags = useMemo<(string | 'All')[]>(() => {
@@ -44,6 +46,27 @@ export function ProjectsSection() {
     if (filter === 'All') return projects
     return projects.filter((p) => (p.tags ?? []).includes(filter) || (p.categories ?? []).includes(filter))
   }, [filter, projects])
+
+  const selectedScreenshots = useMemo(() => {
+    if (!selected) return []
+    const shots = selected.screenshots ?? []
+    if (shots.length) return shots
+    return [selected.cover_image ?? selected.thumbnail_url ?? ''].filter(Boolean)
+  }, [selected])
+
+  useEffect(() => {
+    setActiveImage(0)
+  }, [selected?.id])
+
+  const showPrev = () => {
+    if (!selectedScreenshots.length) return
+    setActiveImage((v) => (v - 1 + selectedScreenshots.length) % selectedScreenshots.length)
+  }
+
+  const showNext = () => {
+    if (!selectedScreenshots.length) return
+    setActiveImage((v) => (v + 1) % selectedScreenshots.length)
+  }
 
   return (
     <section id="projects" className="container-pad py-16 sm:py-20">
@@ -110,6 +133,7 @@ export function ProjectsSection() {
             }
 
             const proj = p as CmsProject
+            const cover = proj.cover_image ?? proj.thumbnail_url ?? ''
             return (
             <motion.div
               key={proj.id}
@@ -129,7 +153,7 @@ export function ProjectsSection() {
                     {/* premium thumbnail */}
                     <div className="relative aspect-[16/10] overflow-hidden">
                       <img
-                        src={proj.thumbnail_url ?? ''}
+                        src={cover}
                         alt={`${proj.title} thumbnail`}
                         loading="lazy"
                         onLoad={() => setLoaded((v) => ({ ...v, [proj.id]: true }))}
@@ -199,14 +223,72 @@ export function ProjectsSection() {
         {selected ? (
           <div className="space-y-5">
             <div className="relative overflow-hidden rounded-2xl border border-white/10">
-              <img
-                src={selected.thumbnail_url ?? ''}
-                alt={`${selected.title} thumbnail`}
+              <motion.img
+                key={`${selected.id}-${activeImage}`}
+                src={selectedScreenshots[activeImage] ?? selected.cover_image ?? selected.thumbnail_url ?? ''}
+                alt={`${selected.title} screenshot ${activeImage + 1}`}
                 loading="lazy"
-                className="h-auto w-full object-cover"
+                initial={{ opacity: 0.3, scale: 1.01 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.24 }}
+                className="h-auto min-h-[280px] w-full object-cover"
+                onTouchStart={(e) => setTouchStartX(e.changedTouches[0]?.clientX ?? null)}
+                onTouchEnd={(e) => {
+                  const endX = e.changedTouches[0]?.clientX ?? null
+                  if (touchStartX === null || endX === null) return
+                  const delta = endX - touchStartX
+                  if (Math.abs(delta) > 40) {
+                    if (delta > 0) showPrev()
+                    else showNext()
+                  }
+                  setTouchStartX(null)
+                }}
               />
               <div className="absolute inset-0 bg-gradient-to-t from-base-900/70 via-transparent to-transparent" />
+              {selectedScreenshots.length > 1 ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={showPrev}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 rounded-xl border border-white/10 bg-black/35 p-2 text-zinc-100 hover:bg-black/55"
+                    aria-label="Previous image"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={showNext}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-xl border border-white/10 bg-black/35 p-2 text-zinc-100 hover:bg-black/55"
+                    aria-label="Next image"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </>
+              ) : null}
             </div>
+            {selectedScreenshots.length > 1 ? (
+              <div className="flex gap-2 overflow-auto pb-1 scrollbar-premium">
+                {selectedScreenshots.map((img, idx) => (
+                  <button
+                    type="button"
+                    key={`${img}-${idx}`}
+                    onClick={() => setActiveImage(idx)}
+                    className={cn(
+                      'relative h-16 w-24 shrink-0 overflow-hidden rounded-xl border',
+                      idx === activeImage ? 'border-white/30' : 'border-white/10',
+                    )}
+                  >
+                    <img src={img} alt={`thumb ${idx + 1}`} loading="lazy" className="h-full w-full object-cover" />
+                    <span
+                      className={cn(
+                        'absolute inset-0 bg-black/20 transition',
+                        idx === activeImage && 'bg-transparent',
+                      )}
+                    />
+                  </button>
+                ))}
+              </div>
+            ) : null}
             <p className="text-sm leading-relaxed text-zinc-300">{selected.long_description}</p>
 
             <div className="grid gap-4 sm:grid-cols-2">
@@ -230,15 +312,15 @@ export function ProjectsSection() {
             </div>
 
             <div className="flex flex-wrap gap-3">
-              {selected.github_url ? (
-                <a href={selected.github_url} target="_blank" rel="noreferrer">
+              {(selected.github_url ?? selected.github) ? (
+                <a href={selected.github_url ?? selected.github ?? '#'} target="_blank" rel="noreferrer">
                   <Button variant="secondary">
                     <GitBranch className="h-4 w-4" /> GitHub Repo
                   </Button>
                 </a>
               ) : null}
-              {selected.live_url ? (
-                <a href={selected.live_url} target="_blank" rel="noreferrer">
+              {(selected.live_url ?? selected.demo) ? (
+                <a href={selected.live_url ?? selected.demo ?? '#'} target="_blank" rel="noreferrer">
                   <Button>
                     Live Demo <ExternalLink className="h-4 w-4" />
                   </Button>

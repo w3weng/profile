@@ -1,15 +1,23 @@
 export type CmsProject = {
   id: string
+  slug: string | null
   title: string
   description: string
   long_description: string
+  category: string | null
+  cover_image: string | null
+  screenshots: string[] | null
   thumbnail_url: string | null
   featured: boolean
   categories: string[]
   tags: string[]
   tech: string[]
   features: string[]
+  status: string | null
+  year: string | null
   github_url: string | null
+  github: string | null
+  demo: string | null
   live_url: string | null
   sort_order: number
   created_at: string
