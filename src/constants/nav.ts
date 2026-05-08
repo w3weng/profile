@@ -5,6 +5,7 @@ import {
   FolderKanban,
   Home,
   Mail,
+  MessageSquareQuote,
   Sparkles,
   User,
 } from 'lucide-react'
@@ -22,6 +23,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'skills', label: 'Skills', href: '#skills', icon: Sparkles },
   { id: 'projects', label: 'Projects', href: '#projects', icon: FolderKanban },
   { id: 'experience', label: 'Experience', href: '#experience', icon: BriefcaseBusiness },
+  { id: 'testimonials', label: 'Testimonials', href: '#testimonials', icon: MessageSquareQuote },
   { id: 'certificates', label: 'Certificates', href: '#certificates', icon: BadgeCheck },
   { id: 'contact', label: 'Contact', href: '#contact', icon: Mail },
 ]

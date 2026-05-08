@@ -497,12 +497,21 @@ export default function AdminDashboard() {
               fields={['role', 'org', 'team', 'period', 'bullets', 'sort_order']}
               onSerialize={(field, value) =>
                 field === 'bullets'
-                  ? fromCsv(String(value))
+                  ? String(value)
+                      .split(/\r?\n/)
+                      .map((item) => item.trim())
+                      .filter(Boolean)
                   : field === 'sort_order'
                     ? Number(value) || 0
                     : value
               }
-              onInitial={(_field, value) => (Array.isArray(value) ? toCsv(value) : (value as any))}
+              onInitial={(field, value) =>
+                field === 'bullets' && Array.isArray(value)
+                  ? (value as string[]).join('\n')
+                  : Array.isArray(value)
+                    ? toCsv(value)
+                    : (value as any)
+              }
               onSave={async (row) => {
                 if (row.id) {
                   const saved = (await updateRow('experience', row.id, row)) as CmsExperience
@@ -909,15 +918,42 @@ function SimpleManager<T extends { id?: string }>({
         className="max-w-2xl"
       >
         <div className="space-y-3">
-          {fields.map((field) => (
-            <input
-              key={`form-${String(field)}`}
-              value={draft[String(field)] ?? ''}
-              onChange={(e) => setDraft((d) => ({ ...d, [String(field)]: e.target.value }))}
-              placeholder={String(field)}
-              className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm"
-            />
-          ))}
+          {fields.map((field) => {
+            const fieldName = String(field)
+            const isCategory = fieldName === 'category' && title === 'Skills Manager'
+            const isBullets = fieldName === 'bullets' && title === 'Experience Manager'
+            const isQuote = fieldName === 'quote' && title === 'Testimonials Manager'
+            return isCategory ? (
+              <select
+                key={`form-${fieldName}`}
+                value={draft[fieldName] ?? ''}
+                onChange={(e) => setDraft((d) => ({ ...d, [fieldName]: e.target.value }))}
+                className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm"
+              >
+                <option value="">Select category</option>
+                <option value="Frontend">Frontend</option>
+                <option value="Backend">Backend</option>
+                <option value="Tools">Tools</option>
+              </select>
+            ) : isBullets || isQuote ? (
+              <textarea
+                key={`form-${fieldName}`}
+                value={draft[fieldName] ?? ''}
+                onChange={(e) => setDraft((d) => ({ ...d, [fieldName]: e.target.value }))}
+                placeholder={isBullets ? 'Add one bullet per line' : 'Add one quote line per line'}
+                rows={isBullets ? 5 : 4}
+                className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm resize-y"
+              />
+            ) : (
+              <input
+                key={`form-${fieldName}`}
+                value={draft[fieldName] ?? ''}
+                onChange={(e) => setDraft((d) => ({ ...d, [fieldName]: e.target.value }))}
+                placeholder={fieldName}
+                className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm"
+              />
+            )
+          })}
           <Button
             className="w-full"
             onClick={async () => {

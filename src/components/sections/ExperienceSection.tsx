@@ -73,11 +73,11 @@ export function ExperienceSection() {
                 <p className="text-xs text-zinc-300">{row.team}</p>
               </div>
 
-              <ul className="space-y-2 text-sm text-zinc-300">
+              <ul className="space-y-3 text-sm text-zinc-300">
                 {(row.bullets ?? []).map((b: string) => (
-                  <li key={b} className="flex gap-2">
-                    <span className="mt-2 h-1.5 w-1.5 rounded-full bg-glow-purple" />
-                    <span>{b}</span>
+                  <li key={b} className="grid gap-2 sm:grid-cols-[auto_1fr]">
+                    <span className="mt-1 h-2 w-2 rounded-full bg-glow-purple" />
+                    <span className="whitespace-pre-wrap">{b}</span>
                   </li>
                 ))}
               </ul>

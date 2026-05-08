@@ -37,7 +37,22 @@ export function TestimonialsSection() {
             ) : (
               <>
                 <Quote className="h-5 w-5 text-glow-cyan" />
-                <p className="mt-3 text-sm leading-relaxed text-zinc-300">{item.quote}</p>
+                {item.quote.includes('\n') ? (
+                  <ul className="mt-3 space-y-2 text-sm text-zinc-300">
+                    {item.quote
+                      .split(/\r?\n/)
+                      .map((line) => line.trim())
+                      .filter(Boolean)
+                      .map((line) => (
+                        <li key={line} className="flex gap-2">
+                          <span className="mt-1 h-2 w-2 rounded-full bg-glow-purple" />
+                          <span>{line}</span>
+                        </li>
+                      ))}
+                  </ul>
+                ) : (
+                  <p className="mt-3 text-sm leading-relaxed text-zinc-300">{item.quote}</p>
+                )}
                 <p className="mt-4 text-sm font-semibold text-zinc-50">{item.name}</p>
                 <p className="text-xs text-zinc-400">
                   {item.role} • {item.org}

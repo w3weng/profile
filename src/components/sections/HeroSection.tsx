@@ -108,7 +108,7 @@ export function HeroSection() {
               <div className="absolute inset-0 p-6 sm:p-8">
                 <div className="relative h-full w-full overflow-hidden rounded-[28px] border border-white/10 bg-white/[0.02]">
                   <img
-                    src="/avatarr.png"
+                    src="/avatarr.gif"
                     alt={`${SITE.name} avatar`}
                     className="h-full w-full object-cover opacity-90"
                     loading="lazy"
